@@ -10,13 +10,13 @@ body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-appl
 main{max-width:720px;margin:0 auto;padding:14px}
 h1{font-size:20px;margin:4px 0 12px}
 nav{display:flex;gap:6px;margin-bottom:14px}
-nav button{flex:1;padding:10px 4px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;font:inherit;font-size:14px}
+nav button{flex:1;padding:10px 4px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;font:inherit;font-size:13px}
 nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
 label{display:block;font-size:13px;color:var(--mu);margin:10px 0 4px}
 input,select{width:100%;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font:inherit}
 .btn{width:100%;margin-top:14px;padding:13px;border:0;border-radius:10px;background:var(--ac);color:#fff;font:inherit;font-weight:600}
-.btn.out{background:var(--bad)}.btn.in{background:var(--ok)}
+.btn.out{background:var(--bad)}.btn.in,.btn.ret{background:var(--ok)}
 .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd);gap:10px}
 .row:last-child{border:0}.mu{color:var(--mu);font-size:13px}
 .qty{font-weight:700;font-size:18px;white-space:nowrap}.low{color:var(--bad)}
@@ -49,8 +49,8 @@ const FIREBASE_CONFIG={
 </main>
 <script>
 const BUSSE=Array.from({length:8},(_,i)=>"Bus "+(i+1));
-const KENN=["RC280","RC290","RC270","RC240","RC889","RC250"],PW="Alex1";
-const TABS=[["stock","Bestand"],["out","Entnahme"],["in","Eingang"],["log","Verlauf"]];
+const KENN=["RC280","RC290","RC270","RC240","RC889","RC250","Büro"],PW="Alex1";
+const TABS=[["stock","Bestand"],["out","Entnahme"],["ret","Rückgabe"],["in","Eingang"],["log","Verlauf"]];
 let tab="stock",inOK=false,inWho="",outBus="",outWho="",moves=[],store=null,mins={},msg="";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -81,51 +81,55 @@ async function init(){
   }
 }
 const CATS=["Getränke Alkoholfrei","Getränke Alkohol","Schnaps","Heißgetränke","Essen","Sonstiges"];
-const PRESETS={"Getränke Alkohol":["Bier Radeberger 0,33","Bier Sternquell 0,33","Bier Köstritzer Schw. 0,33","Bier Kulmbacher 0,33","Radler Löschzwerg 0,33"],"Getränke Alkoholfrei":["Wasser Still","Wasser Medium","Wasser Spritzig","Apfelschorle","Zitronenlimonade","Tonic","Coca Cola"]};
+const PRESETS={"Getränke Alkohol":["Bier Radeberger 0,33","Bier Sternquell 0,33","Bier Köstritzer Schw. 0,33","Bier Kulmbacher 0,33","Radler Löschzwerg 0,33","Sekt Medium","Sekt Rosé","Aperol Spritz"],"Getränke Alkoholfrei":["Wasser Still","Wasser Medium","Wasser Spritzig","Apfelschorle","Zitronenlimonade","Tonic","Coca Cola"]};
 function itemVal(){const v=$("#item").value;return v==="__new"?($("#newitem").value||"").trim():v.trim()}
-function itemOpts(c){if(!c)return'<option value="">– erst Kategorie wählen –</option>';const l=[...new Set([...(PRESETS[c]||[]),...Object.keys(stock()).filter(i=>catOf(i)===c)])].sort((a,b)=>a.localeCompare(b,"de"));return'<option value="">– Artikel wählen –</option>'+l.map(i=>`<option>${esc(i)}</option>`).join("")+'<option value="__new">+ Neuer Artikel …</option>'}
+function itemOpts(c){if(!c)return'<option value="">– erst Kategorie wählen –</option>';const l=[...new Set([...(PRESETS[c]||[]),...Object.keys(stock()).filter(i=>!i.endsWith(RETSUF)&&catOf(i)===c)])].sort((a,b)=>a.localeCompare(b,"de"));return'<option value="">– Artikel wählen –</option>'+l.map(i=>`<option>${esc(i)}</option>`).join("")+'<option value="__new">+ Neuer Artikel …</option>'}
 function catSel(){return`<label>Kategorie</label><select id="cat"><option value="">– Kategorie wählen –</option>${CATS.map(c=>`<option>${c}</option>`).join("")}</select>`}
 function presetCat(i){return CATS.find(c=>(PRESETS[c]||[]).includes(i))||""}
-function catOf(i){const m=moves.find(x=>x.item===i&&x.cat);return m?m.cat:""}
-function unitOf(item){const m=moves.find(x=>x.item===item&&x.unit);return m?m.unit:"Flaschen"}
+const RETSUF=" (nahe am Verfallsdatum)";function baseName(i){return i.endsWith(RETSUF)?i.slice(0,-RETSUF.length):i}function sk(m){return m.type==="ret"&&m.exp?m.item+RETSUF:m.item}
+function catOf(i){const m=moves.find(x=>x.item===baseName(i)&&x.cat);return m?m.cat:""}
+function expFlag(k){return k.endsWith(RETSUF)}
+function unitOf(item){const m=moves.find(x=>x.item===baseName(item)&&x.unit);return m?m.unit:"Flaschen"}
 function fmtQty(k,n){const u=unitOf(k);if(u!=="Flaschen"||n<20)return n+" "+u;const c=Math.floor(n/20),r=n%20;return c+(c>1?" Kästen":" Kasten")+(r?" + "+r+" Fl.":"")+' <span class="mu">('+n+" Flaschen)</span>"}
+function optsFor(ex){const s=stock();return'<option value="">– Artikel wählen –</option>'+Object.keys(s).sort().filter(i=>s[i]>0&&i.endsWith(RETSUF)===ex).map(i=>`<option value="${esc(i)}">${esc(i)} (${s[i]} ${unitOf(i)} auf Lager)</option>`).join("")}
 function unitOpts(base){return[[1,"Flaschen","Flaschen"],[20,"Kasten (20 Fl.)","Flaschen"],[1,"Stück","Stück"],[1,"Rollen","Rollen"],[1,"Packungen","Packungen"]].filter(u=>!base||u[2]===base).map(u=>`<option value="${u[0]}" data-b="${u[2]}">${u[1]}</option>`).join("")}
 function stock(){
   const s={};
-  moves.forEach(m=>{const k=m.item;s[k]=(s[k]||0)+(m.type==="out"?-m.qty:m.qty)});
+  moves.forEach(m=>{const k=sk(m);s[k]=(s[k]||0)+(m.type==="out"?-m.qty:m.qty)});
   return s;
 }
 function render(){
   $("#nav").innerHTML=TABS.map(([k,l])=>`<button class="${k===tab?"on":""}" data-t="${k}">${l}</button>`).join("");
   document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{if(tab!==b.dataset.t){inOK=false;inWho="";outBus="";outWho=""}tab=b.dataset.t;msg="";render()});
   const f=document.activeElement;if(f&&(f.tagName==="INPUT"||f.tagName==="SELECT")&&$("#view").contains(f))return;
-  $("#view").innerHTML=({stock:()=>vStock()+(Object.keys(stock()).length?'<button class="btn" id="korr" style="background:var(--mu)">Bestandskorrektur</button>':''),out:()=>vForm("out"),in:()=>vForm("in"),log:vLog})[tab]();
+  $("#view").innerHTML=({stock:()=>vStock()+(Object.keys(stock()).length?'<button class="btn" id="korr" style="background:var(--mu)">Bestandskorrektur</button>':''),out:()=>vForm("out"),ret:()=>vForm("ret"),in:()=>vForm("in"),log:vLog})[tab]();
   bind();
 }
 function vStock(){
   const s=stock(),keys=Object.keys(s).sort((a,b)=>a.localeCompare(b,"de"));
   if(!keys.length)return'<div class="card mu">Noch keine Artikel. Erfasse zuerst einen Wareneingang.</div>';
   let lastC=null;return'<div class="card">'+keys.slice().sort((a,b)=>{const ia=CATS.indexOf(catOf(a)),ib=CATS.indexOf(catOf(b));return(ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b,"de")}).map(k=>{const c=catOf(k),h=c!==lastC?(lastC=c,'<div class="mu" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:10px">'+(c||"Ohne Kategorie")+'</div>'):"";const m=mins[k.replace(/\//g,"_")],low=m!=null&&s[k]<=m;
-    return h+`<div class="row"><div><b>${esc(k)}</b><div class="mu">${m!=null?"Mindestbestand: "+m:""}<a href="#" data-min="${esc(k)}" style="color:var(--ac);margin-left:${m!=null?8:0}px">${m!=null?"ändern":"Mindestbestand setzen"}</a></div></div><div class="qty ${low?"low":""}">${fmtQty(k,s[k])}${low?" ⚠️":""}</div></div>`}).join("")+'</div>';
+    return h+`<div class="row" ${s[k]<=0?`style="background:rgba(250,204,21,.35);border-radius:8px;padding-left:8px;padding-right:8px"`:k.endsWith(RETSUF)?`style="background:rgba(${expFlag(k)?"239,68,68,.2":"245,158,11,.2"});border-radius:8px;padding-left:8px;padding-right:8px"`:""}><div><b>${esc(k)}</b>${expFlag(k)?" ⏰":""}<div class="mu">${m!=null?"Mindestbestand: "+m:""}<a href="#" data-min="${esc(k)}" style="color:var(--ac);margin-left:${m!=null?8:0}px">${m!=null?"ändern":"Mindestbestand setzen"}</a></div></div><div class="qty ${low?"low":""}">${fmtQty(k,s[k])}${low?" ⚠️":""}</div></div>`}).join("")+'</div>';
 }
 function vForm(type){
   const s=stock(),items=Object.keys(s).sort();
-  const isOut=type==="out";
+  const isOut=type!=="in";
   if(!isOut&&!inOK)return'<div class="card"><b>Wareneingang</b><label>Passwort</label><input id="pw" type="password" autocomplete="off"><button class="btn" id="unlock">Entsperren</button><div class="msg" id="msg" style="color:var(--bad)"></div></div>';
-  return`<div class="card"><b>${isOut?"Entnahme erfassen":"Wareneingang erfassen"}</b>
+  return`<div class="card"><b>${type==="ret"?"Rückgabe erfassen":isOut?"Entnahme erfassen":"Wareneingang erfassen"}</b>
   ${isOut?`<div class="two"><div><label>Kennzeichen *</label><select id="bus"><option value="">– Kennzeichen wählen –</option>${[...KENN].sort().map(k=>`<option ${k===outBus?"selected":""}>${k}</option>`).join("")}</select></div><div><label>Fahrer (Name) *</label><input id="who" placeholder="Name" value="${esc(outWho)}"></div></div>`
   :`<div class="mu" style="margin-top:6px">🔓 Entsperrt – mehrere Artikel nacheinander möglich</div>`}
-  ${isOut?"":catSel()}<label>Artikel</label>${isOut?`<select id="item"><option value="">– Artikel wählen –</option>${items.filter(i=>s[i]>0).map(i=>`<option value="${esc(i)}">${esc(i)} (${s[i]} ${unitOf(i)} auf Lager)</option>`).join("")}</select>`:`<select id="item">${itemOpts("")}</select><input id="newitem" placeholder="Name des neuen Artikels" autocomplete="off" style="display:none;margin-top:8px">`}
+  ${isOut?"":catSel()}${type==="out"?`<label style="display:flex;align-items:center;gap:10px;color:var(--tx);font-size:15px;margin-top:14px"><input type="checkbox" id="useexp" style="width:22px;height:22px;margin:0;padding:0">Nahe am Verfallsdatum (aus Rückgabe)</label>`:""}<label>Artikel</label>${isOut?`<select id="item"><option value="">– Artikel wählen –</option>${(type==="ret"?[...new Set([...items.map(baseName),...Object.values(PRESETS).flat()])].sort((a,b)=>a.localeCompare(b,"de")):items.filter(i=>s[i]>0&&!i.endsWith(RETSUF))).map(i=>`<option value="${esc(i)}">${esc(i)}${type==="ret"?"":" ("+(s[i]||0)+" "+unitOf(i)+" auf Lager)"}</option>`).join("")}</select>`:`<select id="item">${itemOpts("")}</select><input id="newitem" placeholder="Name des neuen Artikels" autocomplete="off" style="display:none;margin-top:8px">`}
   
   <div id="avail" class="mu"></div>
   ${isOut?"":`<label>Eingetragen von (Name) *</label><input id="who" placeholder="Name" value="${esc(inWho)}">`}<div class="two"><div><label>Menge</label><input id="qty" type="number" inputmode="numeric" min="1" placeholder="Anzahl"></div><div><label>Einheit</label><select id="unit">${unitOpts(isOut?"Flaschen":null)}</select></div></div>
-  <button class="btn ${type}" id="go">${isOut?"Entnahme buchen":"Eingang buchen"}</button>
+  ${type==="ret"?`<label style="display:flex;align-items:center;gap:10px;color:var(--tx);font-size:15px;margin-top:14px"><input type="checkbox" id="exp" style="width:22px;height:22px;margin:0;padding:0">Nahe am Verfallsdatum (wird separat geführt)</label>`:""}
+  <button class="btn ${type}" id="go">${type==="ret"?"Rückgabe buchen":isOut?"Entnahme buchen":"Eingang buchen"}</button>
   <div class="msg" id="msg">${esc(msg)}</div></div>`;
 }
 function vLog(){
   const L=moves.filter(m=>m.type!=="base"&&!m.archived);
   if(!L.length)return'<div class="card mu">Noch keine Buchungen.</div>';
-  return'<div class="card tw">'+L.slice(0,200).map(m=>`<div class="row"><div><b class="${m.type==="out"||m.qty<0?"out-t":"in-t"}">${m.type==="out"?"−":m.qty<0?"":"+"}${m.qty}</b> ${esc(m.unit||"Flaschen")} ${esc(m.item)}${m.kisten?" ("+m.kisten+(m.kisten>1?" Kästen":" Kasten")+")":""}<div class="mu">${m.type==="out"?esc(m.bus)+" · ":m.type==="korr"?"Bestandskorrektur · ":"Eingang · "}${esc(m.who||"–")} · ${fmt(m.ts)}</div></div><a href="#" data-del="${m.id}" class="mu" title="Löschen">✕</a></div>`).join("")+'</div><button class="btn out" id="reset">Verlauf zurücksetzen</button>';
+  return'<div class="card tw">'+L.slice(0,200).map(m=>`<div class="row"><div><b class="${m.type==="out"||m.qty<0?"out-t":"in-t"}">${m.type==="out"?"−":m.qty<0?"":"+"}${m.qty}</b> ${esc(m.unit||"Flaschen")} ${esc(m.item)}${m.exp?' <span class="low">⏰ nahe am Verfallsdatum</span>':""}${m.kisten?" ("+m.kisten+(m.kisten>1?" Kästen":" Kasten")+")":""}<div class="mu">${m.type==="out"?esc(m.bus)+" · ":m.type==="ret"?"Rückgabe "+esc(m.bus)+" · ":m.type==="korr"?"Bestandskorrektur · ":"Eingang · "}${esc(m.who||"–")} · ${fmt(m.ts)}</div></div><a href="#" data-del="${m.id}" class="mu" title="Löschen">✕</a></div>`).join("")+'</div><button class="btn out" id="reset">Verlauf zurücksetzen</button>';
 }
 function openKorr(){
   const o=document.createElement("div");
@@ -143,7 +147,7 @@ function openKorr(){
       e.preventDefault();const k=keys[+a.dataset.x],mk=k.replace(/\//g,"_");
       if(a.dataset.armed!=="1"){a.dataset.armed="1";a.textContent="Wirklich löschen?";a.style.fontSize="13px";setTimeout(()=>{a.dataset.armed="";a.textContent="✕";a.style.fontSize="24px"},4000);return}
       try{
-        await Promise.all(moves.filter(m=>m.item===k).map(m=>store.del(m.id)));
+        await Promise.all(moves.filter(m=>sk(m)===k).map(m=>store.del(m.id)));
         if(window._db)await window._db.collection("mins").doc(mk).delete().catch(()=>{});else delete mins[mk];
       }catch(x){$("#kmsg").textContent="Fehler: "+((x&&(x.code||x.message))||x);return}
       a.closest(".row").remove();render();
@@ -159,10 +163,11 @@ function openKorr(){
 }
 function bind(){
   const kb=$("#korr");if(kb)kb.onclick=openKorr;
+  const ue=$("#useexp");if(ue)ue.onchange=()=>{$("#item").innerHTML=optsFor(ue.checked);$("#avail").textContent="";$("#unit").innerHTML=unitOpts("Flaschen")};
   const ul=$("#unlock");if(ul){const t=()=>{if($("#pw").value===PW){inOK=true;msg="";document.activeElement.blur();render()}else{$("#msg").textContent="Falsches Passwort."}};ul.onclick=t;$("#pw").onkeydown=e=>{if(e.key==="Enter")t()}}
-  const bus=$("#bus");if(bus)bus.oninput=()=>{bus.value=bus.value.toUpperCase().replace(/[^A-Z0-9]/g,"")};
+  
   const it=$("#item");
-  if(it)it.oninput=it.onchange=()=>{const s=stock(),u=unitOf(it.value);$("#avail").textContent=it.value in s?"Aktuell im Lager: "+s[it.value]+" "+u:"";if(tab==="out")$("#unit").innerHTML=unitOpts(it.value in s?u:"Flaschen");if(tab==="in"){const c=catOf(it.value)||presetCat(it.value);if(c)$("#cat").value=c}};
+  if(it)it.oninput=it.onchange=()=>{const s=stock(),u=unitOf(it.value);$("#avail").textContent=tab==="ret"?"":it.value in s?"Aktuell im Lager: "+s[it.value]+" "+u:"";if(tab!=="in")$("#unit").innerHTML=unitOpts(it.value in s?u:"Flaschen");if(tab==="in"){const c=catOf(it.value)||presetCat(it.value);if(c)$("#cat").value=c}};
   const go=$("#go");
   const ct=$("#cat");
   if(ct&&it){ct.onchange=()=>{it.innerHTML=itemOpts(ct.value);$("#newitem").style.display="none";$("#avail").textContent=""};
@@ -186,8 +191,8 @@ function bind(){
     const type=tab,item=itemVal(),n=parseInt($("#qty").value,10),f=parseInt($("#unit").value,10),qty=n*f,base=$("#unit").selectedOptions[0].dataset.b,cat=($("#cat")||{}).value,who=($("#who")||{value:""}).value.trim();
     const s=stock(),err=t=>{$("#msg").style.color="var(--bad)";$("#msg").textContent=t};
     if(type==="in"&&!inOK)return err("Bitte erst Passwort eingeben.");
-    if(type==="out"&&(!$("#bus").value.trim()||!who))return err("Bitte Kennzeichen und Name eintragen.");
-    if(type==="out"&&!KENN.includes($("#bus").value.trim().toUpperCase()))return err("Ungültiges Kennzeichen.");
+    if(type!=="in"&&(!$("#bus").value.trim()||!who))return err("Bitte Kennzeichen und Name eintragen.");
+    if(type!=="in"&&!KENN.includes($("#bus").value.trim()))return err("Ungültiges Kennzeichen.");
     if(type==="in"&&!who)return err("Bitte Namen eintragen.");
     if(!item||!(qty>0))return err("Bitte Artikel und Menge angeben.");
     if(item in s&&unitOf(item)!==base)return err("Dieser Artikel wird in "+unitOf(item)+" geführt.");
@@ -199,9 +204,9 @@ function bind(){
       if(qty>s[item])return err("Nur "+s[item]+" auf Lager.");
       
     }
-    const m={type,item,qty,unit:base,who,ts:Date.now()};if(type==="in")m.cat=cat;if(f>1)m.kisten=n;if(type==="out")m.bus=$("#bus").value.trim().toUpperCase();
-    go.disabled=true;if(type==="in")inWho=who;if(type==="out"){outBus=$("#bus").value.trim().toUpperCase();outWho=who}
-    try{await store.add(m);msg=(type==="out"?"✓ Entnahme gebucht: ":"✓ Eingang gebucht: ")+qty+" "+base+" "+item;if(!window._db)return;}
+    const m={type,item,qty,unit:base,who,ts:Date.now()};if(type==="in")m.cat=cat;if(f>1)m.kisten=n;if(type!=="in")m.bus=$("#bus").value.trim();if(type==="ret"&&$("#exp").checked)m.exp=true;if(type==="ret"&&!catOf(item)&&presetCat(item))m.cat=presetCat(item);
+    go.disabled=true;if(type==="in")inWho=who;if(type!=="in"){outBus=$("#bus").value.trim();outWho=who}
+    try{await store.add(m);msg=(type==="out"?"✓ Entnahme gebucht: ":type==="ret"?"✓ Rückgabe gebucht: ":"✓ Eingang gebucht: ")+qty+" "+base+" "+item;if(!window._db)return;}
     catch(e){go.disabled=false;return err("Speichern fehlgeschlagen (fehlende Berechtigung?).")}
     tab=tab;render();
   };
